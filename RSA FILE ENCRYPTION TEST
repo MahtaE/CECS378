@@ -1,0 +1,20 @@
+import sys, os
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS,FUNCTIONS
+
+
+
+#step 1 and step 2
+
+Key = FUNCTIONS.checkPemKeyPair()
+encryption = FUNCTIONS.MyRSAEncryptMAC(CONSTANTS.jpeg_path,Key[0])
+FUNCTIONS.MyRSADecryptMAC(encryption[0], Key[1],encryption[1], encryption[2],encryption[3],encryption[4])
+
+#step3
+
+import sys, os
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS,FUNCTIONS
+
+FUNCTIONS.DirectoryEncrypt(CONSTANTS.testDirectory)
+#step4
