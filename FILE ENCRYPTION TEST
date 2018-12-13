@@ -1,3 +1,5 @@
+#step 1
+
 import sys, os
 sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
 import CONSTANTS,FUNCTIONS
@@ -8,3 +10,43 @@ print("Encrypted Message:\n")
 print(encryption[0])
 print("\nDencrypted Message:")
 FUNCTIONS.Mydecrypt(encryption[0], encryption[1], key)
+
+________________________________________________________
+________________________________________________________
+
+#step 2
+
+#Execution code
+import sys, os
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS,FUNCTIONS
+
+encryption = FUNCTIONS.MyfileEncrypt(CONSTANTS.file_path)
+print("Encrypted File:\n")
+print(encryption[0])
+print("Message in Encrypted File:\n")
+print(open(encryption[0], 'rb').read())
+
+decryption = FUNCTIONS.MyfileDecrypt(encryption[0],encryption[1], encryption[2],encryption[3])
+print("Decrypted File:\n")
+print(decryption)
+print("Message in Decrypted File:\n")
+print(open(decryption, 'rb').read())
+
+_________________________________________________________
+_________________________________________________________
+#step 3 
+
+#Execution code
+import sys, os
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS,FUNCTIONS
+
+encryption = FUNCTIONS.MyfileEncryptMAC(CONSTANTS.jpeg_path)
+encryptedFile = encryption[4]
+ciphertext= encryption[0]
+IV= encryption[1]
+key= encryption[2]
+ext= encryption[3]
+decryption = FUNCTIONS.MyfileDecryptMAC(encryptedFile,ciphertext,IV,key,ext)
+
