@@ -1,0 +1,195 @@
+#Step 1:
+
+#You will design these modules:
+#(C, IV)= Myencrypt(message, key):
+#In this method, you will generate a 16 Bytes IV, and encrypt the message using the key and IV in CBC mode (AES).  You return an error if the len(key) < 32 (i.e., the key has to be 32 bytes= 256 bits).
+#(C, IV, key, ext)= MyfileEncrypt (filepath):
+#In this method, you'll generate a 32Byte key. You open and read the file as a string. You then call the above method to encrypt your file using the key you generated. You return the cipher C, IV, key and the extension of the file (as a string).
+#You'll have to write the inverse of the above methods. 
+
+
+
+import sys, os , json
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS
+import base64
+import FUNCTIONS
+import cryptography
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding, serialization, hashes, asymmetric
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes, hmac
+# encryption method AES-CBC-256
+
+#encryption algorithm
+def Myencrypt(message, key):
+    
+    #checking the length of the key 
+    if len(key)<CONSTANTS.BYTELENGTH:
+        return "ERROR:Increase your key length to pass."
+    
+    try:
+        message = message.encode()
+    except:
+        pass
+    #generate iv
+    iv = os.urandom(CONSTANTS.KEY)   
+    padder = padding.PKCS7(CONSTANTS.BLOCK).padder()
+    padded_data = padder.update(message) 
+    padded_data += padder.finalize()
+    message = padded_data
+        
+    #calling the default AES CBC mode
+    backend = default_backend()
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend = backend)
+    encryptor = cipher.encryptor()
+    ciphertext = encryptor.update(message) + encryptor.finalize()
+    return(ciphertext,iv) 
+    
+#decryption algorithm    
+def Mydecrypt(ciphertext, iv, key):
+    backend = default_backend()
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend = backend)
+    decryptor = cipher.decryptor()
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    
+    try:
+        unpadder = padding.PKCS7(CONSTANTS.BLOCK).unpadder()
+        plaintext = unpadder.update(plaintext) + unpadder.finalize()
+        return plaintext
+    except:
+        return plaintext
+    
+# file encryption algorithm
+def MyfileEncrypt(filepath):
+    key = os.urandom(CONSTANTS.BYTELENGTH)
+    data = open(filepath, 'rb').read()
+    ciphertext, iv = Myencrypt(data, key)
+    #extract the extension from the filepath
+    fileName, ext = os.path.splitext(CONSTANTS.file_path)
+    #create writable text file with encrypted result
+    encryptedFile = open(fileName + '.ENCRYPT', 'wb') 
+    encryptedFile.write(ciphertext)
+    encryptedFile.close()
+    return (fileName +'.ENCRYPT' , iv, key, ext)
+
+# file decryption algorithm
+def MyfileDecrypt(encrypted_filepath, iv,key,original_ext):
+    data =open(encrypted_filepath, 'rb').read()
+    fileName, ext = os.path.splitext(encrypted_filepath)
+    plaintext= Mydecrypt(data, iv, key)
+    decryptedFile = open(fileName+'_DECRYPTED' + original_ext, 'wb')
+    decryptedFile.write(plaintext)
+    decryptedFile.close()
+    return (fileName + original_ext)
+    
+    ________________________________________________________________________________
+    ________________________________________________________________________________
+
+#Step 2:
+
+#Modify your File Encryption to include the policy of Encrypt-then-MAC for every encryption.
+#(C, IV, tag)= MyencryptMAC(message, EncKey, HMACKey)
+#(C, IV, tag, Enckey, HMACKey, ext)= MyfileEncryptMAC (filepath)
+#You will be asked to encrypt a JPEG file and then decrypt it and make sure you still can view the image.
+#You can use SHA256 in your HMAC.
+
+
+def MyEncryptMac(message, Enckey, HMACKey):
+    if (len(HMACKey) < CONSTANTS.KEY):
+        print("HMAC key must larger")
+        return None, None, None
+    else:
+        #Default backend
+        backend = default_backend()
+        #Generate a random IV
+        IV = os.urandom(CONSTANTS.KEY)
+        #Set up cipher with AES-CBC and the passed key and generated IV
+        cipher = Cipher(algorithms.AES(Enckey), modes.CBC(IV), backend = backend)
+        
+        #Pad the message:
+        padder = padding.PKCS7(CONSTANTS.BLOCK).padder()
+        padded_data = padder.update(message) 
+        padded_data += padder.finalize()
+        messagePadded = padded_data
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(messagePadded) + encryptor.finalize()
+        
+        #HMAC
+        h = hmac.HMAC(HMACKey,hashes.SHA256(),backend = backend)
+        h.update(ciphertext)
+        tag = h.finalize()
+        return ciphertext, IV, tag
+ 
+def MyDecryptMAC(ciphertext, IV, key, tag, HMACKey):
+    backend = default_backend()
+    h = hmac.HMAC(HMACKey,hashes.SHA256(),backend = backend)
+    h.update(ciphertext)
+    tag2 = h.finalize()
+    if(tag==tag2):
+        unpadder = padding.PKCS7(CONSTANTS.BLOCK).unpadder()
+        backend = default_backend()
+        cipher = Cipher(algorithms.AES(key), modes.CBC(IV), backend = backend)
+        decryptor = cipher.decryptor()
+        message = decryptor.update(ciphertext)+decryptor.finalize()
+        message = unpadder.update(message)
+        message += unpadder.finalize()
+        return message
+    else:
+        return "Invalid"
+        
+        
+def MyfileEncryptMAC(filePath):
+    fileName, ext = os.path.splitext(filePath)
+    #check if text file, if so then encode to byte
+    if(ext =='.txt'):
+        f = open(filePath,'r')
+        content = f.read()
+        content=content.encode()
+        #attach encr to name
+        filePath =fileName+'/_ENCRYTPED'+ext
+        #else it assumes its a byte file
+    else:
+        f = open(filePath,'rb')
+        content = f.read()
+        
+        #attach encr to name
+        filePath =fileName+'/_ENCRYPTED'+ext
+        f.close()
+        
+    #generate keys
+    Enckey = os.urandom(CONSTANTS.BYTELENGTH)
+    HMACKey = os.urandom(CONSTANTS.BYTELENGTH)
+    
+    #encrypt
+    ciphertext,IV,tag = MyEncryptMac(content, Enckey, HMACKey)
+    
+    #write encrypted file
+    f = open(filePath,'wb')
+    f.write(ciphertext)
+    f.close()
+    return ciphertext, IV, tag, Enckey, ext, filePath
+
+  #decrypt a file
+  def MyfileDecryptMAC(encrypted_filePath, ciphertext, IV, key, original_ext):
+    #open file and read
+    ciphertext =open(encrypted_filePath, 'rb').read()
+    fileName, ext = os.path.splitext(encrypted_filePath)
+    #decrypt message
+    plaintext= Mydecrypt(ciphertext, IV, key)
+    #add decr to name
+    #fileName, ext = os.path.splitext(filePath)
+    #fileName= fileName +'_Decr'+original_ext
+    #check if file type is text, is so, decode then write
+    if(original_ext == '.txt'):
+        plaintext = plaintext.decode()
+        decryptedFile = open(fileName+'/_DECRYPTED' + original_ext, 'wb')
+        decryptedFile.write(plaintext)
+        decryptedFile.close()
+        #else just write
+    else:
+        decryptedFile = open(fileName+'/_DECRYPTED' + original_ext, 'wb')
+        decryptedFile.write(plaintext)
+        decryptedFile.close()
+        return 
